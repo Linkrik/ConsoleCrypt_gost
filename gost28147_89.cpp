@@ -1,54 +1,56 @@
-#include "gost28147_89.h"
-#include<iostream>
-#include<fstream>
+#include    "gost28147_89.h"
+#include    <iostream>
+#include    <fstream>
+#include    <QDataStream>
 
 
 //---Public:---
 void Gost28147::EncryptedFile(QString input_file_name, QByteArray hash)  //hash - key //QFile input_file
 {
     QFile input_file(input_file_name);
-    QFile test("C:/Users/Mikhail/Desktop/1488/test.txt");
 
     //т.к. hash 40 байт, а нам нужно 32
     for (qint8 i = 0; i < 32; i++) // было: for (qint8 i = 0; i < 8; i++) //i < 32
-    this->sercet_key[i] = hash[i];
+    this->sercet_key[i] =static_cast<quint8>(hash[i]);
 	
-    test.open(QIODevice::WriteOnly);
-    //-
-    input_file.open(QIODevice::ReadOnly | QFile::Text); //открываем наш файл только для чтения данных
+    input_file.open(QIODevice::ReadOnly ); //открываем наш файл только для чтения данных
     this->output_file.open(QIODevice::WriteOnly); //открываем наш буфер только для записи данных //encrypted_file поле  //QIODevice::WriteOnly
 
-
-    quint32 length_file_one = input_file.size(); // узнаем размер файла
-    quint32 length_file_two = length_file_one % 8 == 0 ? length_file_one : length_file_one + (8 - (length_file_one % 8)); //дополняем размер файла если он не кратен 8
-
+    quint32 length_file = static_cast<quint32>(input_file.size()); // узнаем размер файла
+    length_file = length_file % 8 == 0 ? length_file : length_file + (8 - (length_file % 8)); //дополняем размер файла если он не кратен 8
 
     quint32 N1, N2, keys32b[8];
+
+    for(qint32 i=0; i<8;i++)
+    {
+        keys32b[i]=0;
+    }
+
     this->CryptSplit256bitsTo32bits(this->sercet_key, keys32b);//sercet_key - hash  //переписать
 
+    QByteArray fileContentsInput = input_file.readAll();
+    QByteArray fileContentsOutput;
+    qint64 sizeTextFile =  fileContentsInput.size();
+    quint32 counterInput=0;
+//    quint32 counterOutput=0;
 
-    quint32 counter=0;
-
-    for (quint32 i = 0; i < length_file_two; i += 8)
+    for (quint32 i = 0; i < length_file; i += 8)
     {
         quint8 read_block_file_8b[8];    //crypt_block8b
         quint8 wriate_block_file_8b[8];  //encrypt_block8b
-        char read_byte;
-        char wriat_byte;
 
         for (qint32 j = 0; j < 8; j++)
         {
-            input_file.read(&read_byte, sizeof (char));
-            read_block_file_8b[j] = read_byte; //[i]
-            //test.write(&read_byte, sizeof (char));
-            //counter++;
+            if(counterInput<=sizeTextFile)
+            read_block_file_8b[j]=fileContentsInput[counterInput];
+            else
+            read_block_file_8b[j]='\0';
+            counterInput++;
         }
 
-        //---
-
-
+        this->CryptSplit64bitsTo32bits
         (
-            this->CryptJoin8bitsTo64bits(read_block_file_8b), //+i
+            this->CryptJoin8bitsTo64bits(read_block_file_8b),
             &N1,
             &N2
         );
@@ -62,17 +64,14 @@ void Gost28147::EncryptedFile(QString input_file_name, QByteArray hash)  //hash 
 
         for (qint32 j = 0; j < 8; j++)
         {
-            wriat_byte = wriate_block_file_8b[j]; //[i]
-            this->output_file.write(&wriat_byte, sizeof (char));
-            this->dataOutput[counter] = wriat_byte;
+            fileContentsOutput.append(wriate_block_file_8b[j]);
+//            counterOutput++;
         }
-
-
      }
+    this->output_file.write(fileContentsOutput);
 
-    test.close();
     input_file.close();
-    output_file.close();
+    this->output_file.close();
 }
 
 
@@ -81,39 +80,42 @@ void Gost28147::DecryptedFile(QString input_file_name, QByteArray hash)  //hash 
 {
     QFile input_file(input_file_name);
 
-    for (qint8 i = 0; i < 8; i++) // было: for (qint8 i = 0; i < 8; i++)
-    sercet_key[i] = hash[i];
+    for (qint8 i = 0; i < 32; i++)
+    this->sercet_key[i] =static_cast<quint8>(hash[i]);
 
+    input_file.open(QIODevice::ReadOnly );
+    this->output_file.open(QIODevice::WriteOnly);
 
-    input_file.open(QIODevice::ReadOnly | QFile::Text); //открываем наш файл только для чтения данных
-    this->output_file.open(QIODevice::WriteOnly); //открываем наш файл только для записи данных //encrypted_file поле  //QIODevice::WriteOnly
-
-
-    qint32 length_file = input_file.size(); // узнаем размер файла
-    length_file = length_file % 8 == 0 ? length_file : length_file + (8 - (length_file % 8)); //дополняем размер файла если он не кратен 8
-
+    quint32 length_file = static_cast<quint32>(input_file.size());
 
     quint32 N1, N2, keys32b[8];
-    this->CryptSplit256bitsTo32bits(this->sercet_key, keys32b);//sercet_key - hash
 
-
-    for (qint32 i = 0; i < length_file; i += 8)
+    for(qint32 i=0; i<8;i++)
     {
-        quint8 read_block_file_8b[8];    //crypt_block8b
-        quint8 wriate_block_file_8b[8];  //encrypt_block8b
-        char read_byte;
-        char wriat_byte;
+        keys32b[i]=0;
+    }
+
+    this->CryptSplit256bitsTo32bits(this->sercet_key, keys32b);//sercet_key - hash  //переписать
+
+    QByteArray fileContentsInput = input_file.readAll();
+    QByteArray fileContentsOutput;
+    quint32 counterInput=0;
+    quint32 counterOutput=0;
+
+    for (quint32 i = 0; i < length_file; i += 8)
+    {
+        quint8 read_block_file_8b[8];
+        quint8 wriate_block_file_8b[8];
 
         for (qint32 j = 0; j < 8; j++)
         {
-            input_file.read(&read_byte, sizeof (char));
-            read_block_file_8b[j] = read_byte; //[i]
+            read_block_file_8b[j]=fileContentsInput[counterInput];
+            counterInput++;
         }
 
-        //---
         this->CryptSplit64bitsTo32bits
         (
-            this->CryptJoin8bitsTo64bits(read_block_file_8b),//+i
+            this->CryptJoin8bitsTo64bits(read_block_file_8b),
             &N1,
             &N2
         );
@@ -127,12 +129,14 @@ void Gost28147::DecryptedFile(QString input_file_name, QByteArray hash)  //hash 
 
         for (qint32 j = 0; j < 8; j++)
         {
-            wriat_byte = wriate_block_file_8b[j]; //[i]
-            this->output_file.write(&wriat_byte, sizeof (char));
+            fileContentsOutput.append(wriate_block_file_8b[j]);
+            counterOutput++;
         }
      }
+    this->output_file.write(fileContentsOutput);
+
     input_file.close();
-    output_file.close();
+    this->output_file.close();
 }
 
 
@@ -155,7 +159,7 @@ void Gost28147::CryptSplit64bitsTo32bits(quint64 block64b, quint32 * block32b_1,
     *block32b_1 = (quint32)(block64b >> 32);
 }
 
-//переписать
+
 void Gost28147::CryptSplit256bitsTo32bits(quint8 * key256b, quint32 * keys32b)//функция разбиения 256 бит на 8 блоков по 32 бита
 {
     quint8 *p8 = key256b;
